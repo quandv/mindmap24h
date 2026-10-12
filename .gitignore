@@ -1,0 +1,10 @@
+backend/dist
+backend/node_modules
+
+frontend/.next
+frontend/node_modules
+
+docker-mindmap24h/data
+docker-mindmap24h/data/*
+docker-mindmap24h/backup.mindmap24h.sql
+
