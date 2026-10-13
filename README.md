@@ -20,8 +20,6 @@
 - [Công nghệ sử dụng](#-công-nghệ-sử-dụng)
 - [Yêu cầu hệ thống](#-yêu-cầu-hệ-thống)
 - [Cài đặt](#-cài-đặt)
-  - [Cách 1: Khởi chạy nhanh với Docker Compose (Khuyên dùng)](#cách-1-khởi-chạy-nhanh-với-docker-compose-khuyên-dùng)
-  - [Cách 2: Khởi chạy thủ công ở môi trường Local Development](#cách-2-khởi-chạy-thủ-công-ở-môi-trường-local-development)
 - [Cấu hình](#-cấu-hình)
 - [Hướng dẫn sử dụng](#-hướng-dẫn-sử-dụng)
   - [Bảng phím tắt (Keyboard Shortcuts)](#bảng-phím-tắt-keyboard-shortcuts)
@@ -110,16 +108,6 @@ Toàn bộ dịch vụ (PostgreSQL, Backend NestJS và Frontend Next.js) đượ
    ```bash
    cd docker-mindmap24h
    docker compose up -d --build
-   ```
-
-3. **(Tùy chọn) Bật tính năng live sync mã nguồn với Docker Watch:**
-   ```bash
-   docker compose watch
-   ```
-
-4. **Kiểm tra trạng thái container:**
-   ```bash
-   docker compose ps
    ```
 
 Ứng dụng sẽ hoạt động tại:
