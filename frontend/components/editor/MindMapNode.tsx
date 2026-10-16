@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Handle, Position, type NodeProps } from '@xyflow/react';
+import { Handle, Position, useUpdateNodeInternals, type NodeProps } from '@xyflow/react';
 import { useEditorStore } from '@/store/editorStore';
 import type { MindMapNode } from '@/types';
 import { Plus, Minus } from 'lucide-react';
@@ -14,7 +14,8 @@ export function MindMapNodeComponent({
 }: NodeProps<MindMapNode>) {
   const [isEditing, setIsEditing] = useState(false);
   const [text, setText] = useState(data.label || '');
-  const inputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const updateNodeInternals = useUpdateNodeInternals();
 
   const updateNodeLabel = useEditorStore((s) => s.updateNodeLabel);
   const addChildNode = useEditorStore((s) => s.addChildNode);
@@ -26,9 +27,15 @@ export function MindMapNodeComponent({
   }, [data.label]);
 
   useEffect(() => {
-    if (isEditing && inputRef.current) {
-      inputRef.current.focus();
-      inputRef.current.select();
+    updateNodeInternals(id);
+  }, [id, data.label, data.childCount, data.collapsed, updateNodeInternals]);
+
+  useEffect(() => {
+    if (isEditing && textareaRef.current) {
+      textareaRef.current.focus();
+      textareaRef.current.select();
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
     }
   }, [isEditing]);
 
@@ -46,8 +53,8 @@ export function MindMapNodeComponent({
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleBlur();
     } else if (e.key === 'Escape') {
@@ -55,6 +62,12 @@ export function MindMapNodeComponent({
       setText(data.label || '');
       setIsEditing(false);
     }
+  };
+
+  const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setText(e.target.value);
+    e.target.style.height = 'auto';
+    e.target.style.height = `${e.target.scrollHeight}px`;
   };
 
   const handleAddChild = (e: React.MouseEvent) => {
@@ -104,14 +117,14 @@ export function MindMapNodeComponent({
       {/* Content */}
       <div className="flex-1 min-w-0">
         {isEditing ? (
-          <input
-            ref={inputRef}
-            type="text"
+          <textarea
+            ref={textareaRef}
+            rows={1}
             value={text}
-            onChange={(e) => setText(e.target.value)}
+            onChange={handleTextChange}
             onBlur={handleBlur}
             onKeyDown={handleKeyDown}
-            className={`w-full bg-transparent outline-none border-b text-sm px-0.5 py-0 ${
+            className={`w-full bg-transparent outline-none border-b text-xl leading-snug px-0.5 py-0 resize-none overflow-hidden ${
               isRoot ? 'text-white border-white' : 'text-slate-900 border-indigo-500'
             }`}
           />

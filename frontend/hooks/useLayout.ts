@@ -2,9 +2,7 @@ import { useCallback } from 'react';
 import dagre from '@dagrejs/dagre';
 import { useReactFlow } from '@xyflow/react';
 import { useEditorStore } from '@/store/editorStore';
-
-const NODE_WIDTH = 180;
-const NODE_HEIGHT = 44;
+import { getNodeWidth, getNodeHeight, VERTICAL_NODE_GAP } from '@/lib/mindmap';
 
 export function useLayout() {
   const { fitView } = useReactFlow();
@@ -24,15 +22,18 @@ export function useLayout() {
       const g = new dagre.graphlib.Graph();
       g.setGraph({
         rankdir: direction,
-        ranksep: 90,
-        nodesep: 35,
+        ranksep: 80,
+        nodesep: VERTICAL_NODE_GAP, // Always 20px apart
         marginx: 50,
         marginy: 50,
       });
       g.setDefaultEdgeLabel(() => ({}));
 
       visibleNodes.forEach((node) => {
-        g.setNode(node.id, { width: NODE_WIDTH, height: NODE_HEIGHT });
+        g.setNode(node.id, {
+          width: getNodeWidth(node),
+          height: getNodeHeight(node),
+        });
       });
 
       visibleEdges.forEach((edge) => {
@@ -48,11 +49,14 @@ export function useLayout() {
         const nodeWithPosition = g.node(node.id);
         if (!nodeWithPosition) return node;
 
+        const w = getNodeWidth(node);
+        const h = getNodeHeight(node);
+
         return {
           ...node,
           position: {
-            x: nodeWithPosition.x - NODE_WIDTH / 2,
-            y: nodeWithPosition.y - NODE_HEIGHT / 2,
+            x: nodeWithPosition.x - w / 2,
+            y: nodeWithPosition.y - h / 2,
           },
         };
       });

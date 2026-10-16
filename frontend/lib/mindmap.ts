@@ -45,18 +45,22 @@ export const BRANCH_COLORS = [
   '#84cc16', // Lime
 ];
 
+export const VERTICAL_NODE_GAP = 20; // Exact 20px gap between adjacent nodes/subtrees
+export const HORIZONTAL_X_GAP = 60;  // Room for connector curves and buttons
+export const MIN_HORIZONTAL_GAP = 220;
+
 /** Estimate node width based on label content and measured dimensions */
 export function getNodeWidth(node: MindMapNode): number {
   if (node.measured?.width && node.measured.width > 0) {
     return node.measured.width;
   }
   const label = node.data?.label || '';
-  const lines = label.split('\n');
+  const lines = label.split(String.fromCharCode(10));
   let maxLineLen = 0;
   for (const line of lines) {
     if (line.length > maxLineLen) maxLineLen = line.length;
   }
-  const estimated = Math.max(140, Math.min(360, maxLineLen * 10 + 48));
+  const estimated = Math.max(140, Math.min(360, maxLineLen * 11 + 48));
   return estimated;
 }
 
@@ -66,12 +70,13 @@ export function getNodeHeight(node: MindMapNode): number {
     return node.measured.height;
   }
   const label = node.data?.label || '';
-  const lines = label.split('\n');
+  const lines = label.split(String.fromCharCode(10));
   let visualLines = 0;
   for (const line of lines) {
-    visualLines += Math.max(1, Math.ceil(line.length / 26));
+    visualLines += Math.max(1, Math.ceil(line.length / 28));
   }
-  const estimated = Math.max(44, visualLines * 26 + 24);
+  // py-2 (16px) + border (2px) + visualLines * lineHeight (28px)
+  const estimated = Math.max(46, visualLines * 28 + 18);
   return estimated;
 }
 
@@ -139,8 +144,8 @@ export function assignBranchColors(
  * Recalculates layout and alignment for child nodes based on dynamic node dimensions.
  * - Alignment: All child nodes originating from the same parent share the exact same X-axis,
  *   placed beyond the parent node's right edge so children never overlap the parent.
- * - Spacing & Expansion: Vertical spacing between adjacent child nodes (and their subtrees) is
- *   calculated dynamically using actual node heights and subtree bounds to prevent any overlap.
+ * - Spacing: Sibling nodes and adjacent subtrees are always spaced exactly VERTICAL_NODE_GAP (20px) apart
+ *   vertically, regardless of how the content inside any node changes.
  */
 export function recalculateTreeLayout(
   nodes: MindMapNode[],
@@ -170,19 +175,15 @@ export function recalculateTreeLayout(
     return childrenMap.get(nodeId) || [];
   };
 
-  const Y_MARGIN = 28;
-  const X_MARGIN = 50;
-  const MIN_X_GAP = 240;
-
   const subtreeSpanMap = new Map<string, number>();
 
-  const getSubtreeSpan = (nodeId: string): number => {
+  const getSubtreeHeight = (nodeId: string): number => {
     if (subtreeSpanMap.has(nodeId)) {
       return subtreeSpanMap.get(nodeId)!;
     }
-    const children = getVisibleChildren(nodeId);
     const node = nodeMap.get(nodeId);
-    const selfHeight = node ? getNodeHeight(node) + Y_MARGIN : 44 + Y_MARGIN;
+    const selfHeight = node ? getNodeHeight(node) : 46;
+    const children = getVisibleChildren(nodeId);
 
     if (children.length === 0) {
       subtreeSpanMap.set(nodeId, selfHeight);
@@ -190,16 +191,17 @@ export function recalculateTreeLayout(
     }
 
     let childrenSpanSum = 0;
-    for (const childId of children) {
-      childrenSpanSum += getSubtreeSpan(childId);
+    for (let i = 0; i < children.length; i++) {
+      childrenSpanSum += getSubtreeHeight(children[i]);
+      if (i > 0) {
+        childrenSpanSum += VERTICAL_NODE_GAP;
+      }
     }
 
     const span = Math.max(selfHeight, childrenSpanSum);
     subtreeSpanMap.set(nodeId, span);
     return span;
   };
-
-  const rootNodes = nodes.filter((n) => n.data?.isRoot || !parentMap.has(n.id));
 
   const newPositions = new Map<string, { x: number; y: number }>();
 
@@ -209,33 +211,72 @@ export function recalculateTreeLayout(
 
     const parentNode = nodeMap.get(parentId);
     const parentWidth = parentNode ? getNodeWidth(parentNode) : 160;
+    const parentHeight = parentNode ? getNodeHeight(parentNode) : 46;
+    const parentCenterY = parentPos.y + parentHeight / 2;
 
-    const childX = parentPos.x + Math.max(MIN_X_GAP, parentWidth + X_MARGIN);
+    const childX = parentPos.x + Math.max(MIN_HORIZONTAL_GAP, parentWidth + HORIZONTAL_X_GAP);
 
-    const totalSpan = children.reduce((sum, childId) => sum + getSubtreeSpan(childId), 0);
-    let currentY = parentPos.y - totalSpan / 2;
+    let totalChildrenHeight = 0;
+    for (let i = 0; i < children.length; i++) {
+      totalChildrenHeight += getSubtreeHeight(children[i]);
+      if (i > 0) {
+        totalChildrenHeight += VERTICAL_NODE_GAP;
+      }
+    }
+
+    let currentY = parentCenterY - totalChildrenHeight / 2;
 
     for (const childId of children) {
-      const childSpan = getSubtreeSpan(childId);
-      const childY = currentY + childSpan / 2;
+      const childSubtreeH = getSubtreeHeight(childId);
+      const childNode = nodeMap.get(childId);
+      const childSelfH = childNode ? getNodeHeight(childNode) : 46;
 
-      const pos = { x: childX, y: childY };
+      const childCenterY = currentY + childSubtreeH / 2;
+      const childTopY = childCenterY - childSelfH / 2;
+
+      const pos = { x: childX, y: childTopY };
       newPositions.set(childId, pos);
 
       positionChildren(childId, pos);
 
-      currentY += childSpan;
+      currentY += childSubtreeH + VERTICAL_NODE_GAP;
     }
   };
 
-  for (const root of rootNodes) {
-    const rootPos = newPositions.get(root.id) || root.position;
+  const rootNodes = nodes.filter((n) => n.data?.isRoot || !parentMap.has(n.id));
+
+  // Position root nodes and their subtrees with exact VERTICAL_NODE_GAP spacing
+  let rootYCursor = 0;
+  rootNodes.forEach((root, idx) => {
+    const rootSubtreeH = getSubtreeHeight(root.id);
+    const rootSelfH = getNodeHeight(root);
+
+    let rootTopY: number;
+    const rootX = root.position.x;
+
+    if (idx === 0) {
+      rootTopY = root.position.y;
+      rootYCursor = rootTopY + rootSelfH / 2 + rootSubtreeH / 2;
+    } else {
+      const rootCenterY = rootYCursor + VERTICAL_NODE_GAP + rootSubtreeH / 2;
+      rootTopY = rootCenterY - rootSelfH / 2;
+      rootYCursor = rootCenterY + rootSubtreeH / 2;
+    }
+
+    const rootPos = { x: rootX, y: rootTopY };
+    newPositions.set(root.id, rootPos);
     positionChildren(root.id, rootPos);
-  }
+  });
 
   return nodes.map((node) => {
     const pos = newPositions.get(node.id);
     if (pos) {
+      if (
+        Math.abs(pos.x - node.position.x) < 0.01 &&
+        Math.abs(pos.y - node.position.y) < 0.01
+      ) {
+        return node;
+      }
       return {
         ...node,
         position: pos,
@@ -295,7 +336,7 @@ export function createChild(
 ): { node: MindMapNode; edge: MindMapEdge } {
   const id = newNodeId();
   const parentWidth = getNodeWidth(parent);
-  const xOffset = Math.max(240, parentWidth + 50);
+  const xOffset = Math.max(MIN_HORIZONTAL_GAP, parentWidth + HORIZONTAL_X_GAP);
 
   const node: MindMapNode = {
     id,
@@ -336,13 +377,14 @@ export function createSibling(
   const parent = existingNodes.find((n) => n.id === parentId);
   if (!parent) return null;
 
+  const currentHeight = getNodeHeight(current);
   const id = newNodeId();
   const node: MindMapNode = {
     id,
     type: 'mindmap',
     position: {
       x: current.position.x,
-      y: current.position.y + 65,
+      y: current.position.y + currentHeight + VERTICAL_NODE_GAP,
     },
     data: {
       label: 'New Idea',

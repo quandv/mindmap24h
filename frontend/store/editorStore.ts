@@ -276,7 +276,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const { nodes, edges } = get();
     get().pushHistory();
     const updatedNodes = nodes.map((n) =>
-      n.id === id ? { ...n, data: { ...n.data, label } } : n
+      n.id === id ? { ...n, data: { ...n.data, label }, measured: undefined } : n
     );
     const synced = syncVisibility(updatedNodes, edges);
     set({ nodes: synced.nodes, edges: synced.edges, isDirty: true });
@@ -286,7 +286,16 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const { nodes, edges } = get();
     get().pushHistory();
     const updatedNodes = nodes.map((n) =>
-      n.id === id ? { ...n, data: { ...n.data, ...data } } : n
+      n.id === id
+        ? {
+            ...n,
+            data: { ...n.data, ...data },
+            measured:
+              data.label !== undefined && data.label !== n.data.label
+                ? undefined
+                : n.measured,
+          }
+        : n
     );
     const synced = syncVisibility(updatedNodes, edges);
     set({ nodes: synced.nodes, edges: synced.edges, isDirty: true });
